@@ -1,36 +1,108 @@
-# --- CÓDIGO DE EMERGENCIA AUTO-REPARABLE ---
-try:
-    # 1. Listamos TODOS los modelos que tu nueva llave puede ver
-    modelos = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    
-    # 2. Elegimos el mejor disponible (priorizamos flash, luego pro)
-    modelo_a_usar = ""
-    for m in modelos:
-        if "gemini-1.5-flash" in m:
-            modelo_a_usar = m
-            break
-    if not modelo_a_usar and modelos:
-        modelo_a_usar = modelos[0] # Si no hay flash, usa el primero que funcione
-    
-    if modelo_a_usar:
-        model = genai.GenerativeModel(modelo_a_usar)
-        st.sidebar.success(f"Cerebro conectado: {modelo_a_usar}")
-    else:
-        st.error("No se encontraron modelos disponibles para esta API Key.")
-        st.stop()
-        
-except Exception as e:
-    st.error(f"Error crítico de conexión: {e}")
+import streamlit as st
+import os
+import pandas as pd
+import google.generativeai as genai
+from pypdf import PdfReader
+from datetime import datetime
+
+# --- 1. SEGURIDAD (SECRETS) ---
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("⚠️ Configura 'GOOGLE_API_KEY' en los Secrets de Streamlit.")
     st.stop()
 
-# --- DENTRO DEL BOTÓN DE GENERAR SOLUCIÓN ---
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+
+# --- 2. CONFIGURACIÓN DE PÁGINA Y LOGIN ---
+st.set_page_config(page_title="ConversIA - Synersight", layout="centered")
+
+if 'auth' not in st.session_state:
+    st.session_state.auth = False
+
+if not st.session_state.auth:
+    st.title("🔐 Acceso ConversIA")
+    u = st.text_input("Usuario")
+    p = st.text_input("Contraseña", type="password")
+    if st.button("Entrar"):
+        if (u == "admin" and p == "synersight2026") or (u == "tecnico" and p == "agv2026"):
+            st.session_state.auth = True
+            st.session_state.user = u
+            st.rerun()
+        else:
+            st.error("Credenciales incorrectas")
+    st.stop()
+
+# --- 3. CONEXIÓN AL CEREBRO (AUTO-REPARABLE) ---
+try:
+    # Listamos modelos disponibles para evitar el error 404
+    modelos_visibles = [m.name for m in genai.list_models()]
+    # Buscamos el nombre exacto que Google le da al modelo en tu región
+    modelo_final = "models/gemini-1.5-flash" if "models/gemini-1.5-flash" in modelos_visibles else modelos_visibles[0]
+    model = genai.GenerativeModel(modelo_final)
+    st.sidebar.success(f"✅ Motor conectado")
+except Exception as error_inicial:
+    st.error(f"Error de conexión inicial: {error_inicial}")
+    st.stop()
+
+# --- 4. FUNCIONES TÉCNICAS ---
+def leer_documentos():
+    contexto = ""
+    if not os.path.exists("conocimiento"):
+        os.makedirs("conocimiento")
+    for f in os.listdir("conocimiento"):
+        ruta = os.path.join("conocimiento", f)
+        try:
+            if f.endswith(".pdf"):
+                reader = PdfReader(ruta)
+                for page in reader.pages:
+                    contexto += page.extract_text()
+            elif f.endswith(".txt"):
+                with open(ruta, "r", encoding="utf-8") as file:
+                    contexto += file.read()
+            contexto += f"\n[FUENTE: {f}]\n"
+        except: pass
+    return contexto
+
+# --- 5. INTERFAZ DE CHAT ---
+st.title("🤖 ConversIA Prototipo")
+st.sidebar.write(f"👤 {st.session_state.user}")
+
+pregunta = st.text_area("Describe el síntoma o código de error:", placeholder="Ej: Error preventivo de baterías...")
+
 if st.button("GENERAR SOLUCIÓN"):
-    # ... (tu código de extraer_conocimiento)
-    try:
-        # Llamada directa con el modelo detectado
-        res = model.generate_content(prompt)
-        st.subheader("📋 Diagnóstico")
-        st.write(res.text)
-        # ... (tu código de guardado en historial)
-    except Exception as e:
-        st.error(f"El modelo {modelo_a_usar} devolvió un error: {e}")
+    if not pregunta:
+        st.warning("Por favor, escribe una consulta.")
+    else:
+        with st.spinner("Consultando base de conocimiento de Synersight..."):
+            ctx = leer_documentos()
+            
+            prompt = f"""
+            Eres un experto técnico de Synersight. 
+            Usa SOLO este contexto para responder: {ctx}. 
+            Si la información no está en el texto, di que avisarás a la oficina de Valladolid.
+            Pregunta técnica: {pregunta}
+            """
+            
+            try:
+                res = model.generate_content(prompt)
+                st.subheader("📋 Diagnóstico Oficial")
+                st.markdown(res.text)
+                
+                # ARCHIVADO PARA LA OFICINA (CSV)
+                log_file = "historial_casos.csv"
+                nuevo_registro = pd.DataFrame([{
+                    "Fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "Técnico": st.session_state.user,
+                    "Incidencia": pregunta
+                }])
+                nuevo_registro.to_csv(log_file, mode='a', header=not os.path.exists(log_file), index=False)
+                st.toast("Caso archivado para revisión matinal.")
+                
+            except Exception as e:
+                st.error(f"Error en la consulta: {e}")
+
+if st.sidebar.checkbox("📂 Ver Historial Oficina"):
+    if os.path.exists("historial_casos.csv"):
+        st.write("Registros acumulados para revisión:")
+        st.dataframe(pd.read_csv("historial_casos.csv"))
+    else:
+        st.write("No hay incidencias registradas hoy.")
