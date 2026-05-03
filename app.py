@@ -44,6 +44,8 @@ except Exception as error_inicial:
     st.stop()
 
 # --- 4. FUNCIONES TÉCNICAS ---
+from docx import Document # Añade esta importación arriba del todo
+
 def leer_documentos():
     contexto = ""
     if not os.path.exists("conocimiento"):
@@ -51,15 +53,26 @@ def leer_documentos():
     for f in os.listdir("conocimiento"):
         ruta = os.path.join("conocimiento", f)
         try:
+            # LECTURA DE PDF
             if f.endswith(".pdf"):
                 reader = PdfReader(ruta)
                 for page in reader.pages:
                     contexto += page.extract_text()
+            
+            # LECTURA DE WORD (.docx)
+            elif f.endswith(".docx"):
+                doc = Document(ruta)
+                for para in doc.paragraphs:
+                    contexto += para.text + "\n"
+            
+            # LECTURA DE TXT
             elif f.endswith(".txt"):
                 with open(ruta, "r", encoding="utf-8") as file:
-                    contexto += file.read()
-            contexto += f"\n[FUENTE: {f}]\n"
-        except: pass
+                    texto += file.read()
+            
+            contexto += f"\n--- FIN DE ARCHIVO: {f} ---\n"
+        except Exception as e:
+            st.error(f"No se pudo leer {f}: {e}")
     return contexto
 
 # --- 5. INTERFAZ DE CHAT ---
