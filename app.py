@@ -137,7 +137,7 @@ else:
                     st.error("La carpeta 'conocimiento' está vacía. Sube archivos a GitHub.")
                 else:
                     # 2. Configurar el modelo (Temperatura 0 para máxima fidelidad)
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel('models/gemini-1.5-flash')
                     
                     # 3. El Prompt restrictivo 100% fiel
                     prompt_instrucciones = f"""
