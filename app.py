@@ -63,7 +63,7 @@ if st.button("GENERAR SOLUCIÓN"):
         with st.spinner("Buscando en manuales..."):
             ctx = leer_conocimiento()
             # USAMOS EL MODELO MÁS ESTABLE
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('gemini-1.0-pro')
             
             prompt = f"Eres experto de Synersight. Usa SOLO este texto: {ctx}. Pregunta: {query}. Si no lo sabes, di que no aparece en manuales."
             
