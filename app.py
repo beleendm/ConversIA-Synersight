@@ -6,84 +6,80 @@ from pypdf import PdfReader
 from datetime import datetime
 
 # --- CONFIGURACIÓN DE SEGURIDAD ---
-try:
-    # Leemos la API Key desde los Secrets de Streamlit
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
-except Exception:
-    st.error("❌ Error de configuración: Verifica la API Key en los Secrets de Streamlit.")
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("⚠️ Configura 'GOOGLE_API_KEY' en los Secrets de Streamlit.")
     st.stop()
 
-# --- ESTILO SYNERSIGHT ---
-st.set_page_config(page_title="ConversIA Enterprise", layout="centered")
-st.markdown("<style>.stButton>button { background-color: #004a99; color: white; }</style>", unsafe_allow_html=True)
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-# --- LOGIN ---
-if 'autenticado' not in st.session_state:
-    st.session_state.autenticado = False
+# --- ESTILO Y LOGIN ---
+st.set_page_config(page_title="ConversIA Synersight", layout="centered")
 
-if not st.session_state.autenticado:
+if 'auth' not in st.session_state:
+    st.session_state.auth = False
+
+if not st.session_state.auth:
     st.title("🔐 Acceso ConversIA")
-    user = st.text_input("Usuario")
-    pw = st.text_input("Contraseña", type="password")
+    u = st.text_input("Usuario")
+    p = st.text_input("Contraseña", type="password")
     if st.button("Entrar"):
-        if (user == "admin" and pw == "synersight2026") or (user == "tecnico" and pw == "agv2026"):
-            st.session_state.autenticado = True
-            st.session_state.usuario = user
+        if (u == "admin" and p == "synersight2026") or (u == "tecnico" and p == "agv2026"):
+            st.session_state.auth = True
+            st.session_state.user = u
             st.rerun()
         else:
             st.error("Credenciales incorrectas")
     st.stop()
 
-# --- FUNCIONES RAG ---
-def extraer_conocimiento():
-    contexto = ""
+# --- FUNCIONES ---
+def leer_conocimiento():
+    texto = ""
     if not os.path.exists("conocimiento"):
         os.makedirs("conocimiento")
-    for arc in os.listdir("conocimiento"):
-        ruta = os.path.join("conocimiento", arc)
+    for f in os.listdir("conocimiento"):
+        path = os.path.join("conocimiento", f)
         try:
-            if arc.endswith(".pdf"):
-                lector = PdfReader(ruta)
-                for pag in lector.pages:
-                    contexto += pag.extract_text()
-            elif arc.endswith(".txt"):
-                with open(ruta, "r", encoding="utf-8") as f:
-                    contexto += f.read()
-            contexto += f"\n[Fuente: {arc}]\n"
+            if f.endswith(".pdf"):
+                reader = PdfReader(path)
+                for page in reader.pages:
+                    texto += page.extract_text()
+            elif f.endswith(".txt"):
+                with open(path, "r", encoding="utf-8") as file:
+                    texto += file.read()
+            texto += f"\n--- FIN DE ARCHIVO: {f} ---\n"
         except: pass
-    return contexto
+    return texto
 
-# --- INTERFAZ DE CHAT ---
-st.title("🤖 ConversIA - Synersight")
-with st.sidebar:
-    st.write(f"👤 Usuario: {st.session_state.usuario}")
-    if st.button("Cerrar Sesión"):
-        st.session_state.autenticado = False
-        st.rerun()
+# --- INTERFAZ ---
+st.title("🤖 ConversIA - Soporte Synersight")
+st.sidebar.write(f"👤 {st.session_state.user}")
 
-pregunta = st.text_area("Describa la incidencia técnica:", placeholder="Ej: Fallo en el cofre de baterías...")
+query = st.text_area("Describe el síntoma o código de error:")
 
 if st.button("GENERAR SOLUCIÓN"):
-    if not pregunta:
-        st.warning("Escriba una pregunta.")
+    if not query:
+        st.warning("Introduce una consulta.")
     else:
-        with st.spinner("Consultando manuales internos..."):
-            contexto = extraer_conocimiento()
-            # Usamos el modelo 'gemini-1.5-flash' que es el más rápido y moderno
-            model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
+        with st.spinner("Buscando en manuales..."):
+            ctx = leer_conocimiento()
+            # USAMOS EL MODELO MÁS ESTABLE
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
-            prompt = f"Eres un experto de Synersight. Usa SOLO este contexto: {contexto}. Pregunta: {pregunta}. Si no lo sabes, di que avisarás a la oficina de Valladolid."
+            prompt = f"Eres experto de Synersight. Usa SOLO este texto: {ctx}. Pregunta: {query}. Si no lo sabes, di que no aparece en manuales."
             
             try:
-                # Quitamos la configuración de temperatura compleja para evitar fallos
                 res = model.generate_content(prompt)
-                st.subheader("📋 Diagnóstico Oficial")
+                st.subheader("📋 Diagnóstico")
                 st.write(res.text)
                 
-                # Guardar historial
-                log = pd.DataFrame([{"Fecha": datetime.now(), "User": st.session_state.usuario, "Pregunta": pregunta}])
-                log.to_csv("historial.csv", mode='a', header=not os.path.exists("historial.csv"), index=False)
-                st.toast("Incidencia registrada para la oficina.")
+                # Registro para oficina
+                log_file = "historial.csv"
+                nuevo_log = pd.DataFrame([{"Fecha": datetime.now(), "Técnico": st.session_state.user, "Fallo": query}])
+                nuevo_log.to_csv(log_file, mode='a', header=not os.path.exists(log_file), index=False)
+                st.toast("✅ Registrado para la oficina")
             except Exception as e:
-                st.error(f"Error técnico: {e}")
+                st.error(f"Error del motor: {e}")
+
+if st.sidebar.checkbox("Ver registros oficina"):
+    if os.path.exists("historial.csv"):
+        st.dataframe(pd.read_csv("historial.csv"))
