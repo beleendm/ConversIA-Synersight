@@ -88,17 +88,20 @@ if st.button("GENERAR SOLUCIÓN"):
         with st.spinner("Consultando base de conocimiento de Synersight..."):
             ctx = leer_documentos()
             
-           prompt = f"""
-            ANALIZA DETALLADAMENTE EL SIGUIENTE CONTEXTO:
+            prompt = f"""
+            Eres un experto técnico senior de Synersight en Valladolid.
+            Tu misión es ayudar a técnicos de campo usando SOLO el contexto de abajo.
+            
+            CONTEXTO DE MANUALES:
             {ctx}
-
-            PREGUNTA TÉCNICA: {pregunta}
-
-            INSTRUCCIONES CRÍTICAS:
-            1. Busca específicamente secciones tituladas como la pregunta (ej: 'Preventivo del cofre de baterías').
-            2. Enumera los pasos del 1 al 5 tal cual aparecen en el texto.
-            3. Si el texto menciona 'magnetotérmico' o 'polímetro', inclúyelo en la respuesta.
-            4. Si encuentras la información, NO digas que avisarás a Valladolid.
+            
+            PREGUNTA TÉCNICA:
+            {pregunta}
+            
+            REGLAS:
+            1. Si la solución está en los manuales (ej: 'Preventivo del cofre de baterías'), numera los pasos exactamente como aparecen.
+            2. Si no lo sabes, di: "Información no disponible. Avisaré a la oficina de Valladolid."
+            3. No inventes pasos. Menciona el nombre del archivo de origen.
             """
             
             try:
