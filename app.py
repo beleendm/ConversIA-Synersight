@@ -71,7 +71,7 @@ if st.button("GENERAR SOLUCIÓN"):
         with st.spinner("Consultando manuales internos..."):
             contexto = extraer_conocimiento()
             # Usamos el modelo 'gemini-1.5-flash' que es el más rápido y moderno
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
             
             prompt = f"Eres un experto de Synersight. Usa SOLO este contexto: {contexto}. Pregunta: {pregunta}. Si no lo sabes, di que avisarás a la oficina de Valladolid."
             
